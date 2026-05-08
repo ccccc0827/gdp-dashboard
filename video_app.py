@@ -9,6 +9,8 @@ import av
 import time
 import threading
 import base64
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
 from ultralytics import YOLO
 from streamlit_webrtc import webrtc_streamer, WebRtcMode
@@ -119,6 +121,32 @@ if "sound_enabled" not in st.session_state:
 # =========================
 def dist(p1, p2):
     return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
+
+def put_chinese_text(img, text, position, text_color=(255, 255, 255), font_size=30):
+    """將 OpenCV 影像轉換為 PIL 畫上中文字體後再轉回 OpenCV"""
+    # OpenCV 的格式是 BGR，PIL 處理需轉為 RGB
+    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    pil_img = Image.fromarray(img_rgb)
+    draw = ImageDraw.Draw(pil_img)
+    
+    # 自動嘗試載入系統的繁體中文字體
+    try:
+        # 嘗試 Windows 預設的微軟正黑體
+        font = ImageFont.truetype("msjh.ttc", font_size)
+    except IOError:
+        try:
+            # 嘗試 macOS 的蘋方體
+            font = ImageFont.truetype("PingFang.ttc", font_size)
+        except IOError:
+            # 若部署到雲端 (如 Streamlit Cloud)，請準備字體檔並修改此處
+            # font = ImageFont.truetype("NotoSansTC-Regular.ttf", font_size)
+            font = ImageFont.load_default()
+            
+    # PIL 畫上文字
+    draw.text(position, text, font=font, fill=text_color)
+    
+    # 轉回 OpenCV 的 BGR 格式
+    return cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
 
 # =========================
 # 姿勢分類
@@ -263,13 +291,16 @@ class PoseVideoProcessor:
             monitor_text = "監測中" if shared_state.monitoring else "已停止"
             info_text = f"{monitor_text} | 姿勢: {shared_state.current_posture} | 持續時間: {int(shared_state.duration)} 秒"
 
+            # 畫黑色背景底框
             cv2.rectangle(annotated, (20, 20), (900, 70), (0, 0, 0), -1)
-            cv2.putText(annotated, info_text, (30, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2, cv2.LINE_AA)
+            
+            # 【使用 Pillow 繪製中文】替換掉原本的 cv2.putText
+            annotated = put_chinese_text(annotated, info_text, (30, 25), text_color=(255, 255, 255), font_size=32)
 
-            # Alarm 畫面紅框
+            # Alarm 畫面紅框 (ALARM 依然可以使用 cv2.putText 因為是純英文)
             if shared_state.alarm:
                 cv2.rectangle(annotated, (0, 0), (annotated.shape[1], annotated.shape[0]), (0, 0, 255), 10)
-                cv2.putText(annotated, "ALARM", (30, 110), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 4, cv2.LINE_AA)
+                cv2.putText(annotated, "ALARM", (30, 140), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 4, cv2.LINE_AA)
 
         return av.VideoFrame.from_ndarray(annotated, format="bgr24")
 
