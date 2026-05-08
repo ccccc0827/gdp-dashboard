@@ -1,7 +1,7 @@
 import os
 
 # =========================
-# 強制關閉 GUI 圖形依賴（避免 libGL.so.1）
+# 防止 OpenCV libGL 錯誤
 # =========================
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
@@ -18,9 +18,10 @@ from PIL import Image, ImageDraw, ImageFont
 from ultralytics import YOLO
 from streamlit_webrtc import webrtc_streamer, WebRtcMode
 from pathlib import Path
+from streamlit_autorefresh import st_autorefresh
 
 # =========================
-# Page config
+# Page Config
 # =========================
 st.set_page_config(
     page_title="長照睡姿固定過久警報系統",
@@ -29,7 +30,7 @@ st.set_page_config(
 )
 
 # =========================
-# CSS
+# Custom CSS
 # =========================
 st.markdown("""
 <style>
@@ -98,12 +99,12 @@ st.markdown(
 )
 
 st.markdown(
-    '<div class="sub-text">使用 AI 姿勢辨識分析臥床者是否長時間未翻身。</div>',
+    '<div class="sub-text">使用影像分析臥床姿勢變化，協助照護員及早發現長時間未翻身狀況。</div>',
     unsafe_allow_html=True
 )
 
 # =========================
-# Load YOLO
+# Load YOLO Model
 # =========================
 @st.cache_resource
 def load_model():
@@ -135,26 +136,23 @@ if "shared_state" not in st.session_state:
 
 shared_state = st.session_state.shared_state
 
-# =========================
-# Helper
-# =========================
-def dist(p1, p2):
-    return math.sqrt(
-        (p1[0] - p2[0])**2 +
-        (p1[1] - p2[1])**2
-    )
+if "sound_enabled" not in st.session_state:
+    st.session_state.sound_enabled = False
 
 # =========================
-# 中文繪製
+# Helper Functions
 # =========================
+def dist(p1, p2):
+    return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
+
+
 def put_chinese_text(
     img,
     text,
     position,
-    text_color=(255,255,255),
+    text_color=(255, 255, 255),
     font_size=30
 ):
-
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     pil_img = Image.fromarray(img_rgb)
@@ -164,11 +162,11 @@ def put_chinese_text(
     try:
         font = ImageFont.truetype("msjh.ttc", font_size)
 
-    except:
+    except IOError:
         try:
             font = ImageFont.truetype("PingFang.ttc", font_size)
 
-        except:
+        except IOError:
             font = ImageFont.truetype(
                 "NotoSansTC-Regular.ttf",
                 font_size
@@ -187,15 +185,15 @@ def put_chinese_text(
     )
 
 # =========================
-# 姿勢分類
+# Posture Classification
 # =========================
 def classify_posture(results):
 
     current_posture = "無人躺著"
 
     if (
-        results[0].keypoints is not None and
-        len(results[0].keypoints.xy) > 0
+        results[0].keypoints is not None
+        and len(results[0].keypoints.xy) > 0
     ):
 
         kps = results[0].keypoints.xy[0]
@@ -212,27 +210,24 @@ def classify_posture(results):
 
             is_side = (
                 (conf[5] < 0.4 or conf[6] < 0.4)
-                or
-                (
-                    torso_length > 0 and
-                    (shoulder_width / torso_length) < 0.5
+                or (
+                    torso_length > 0
+                    and (shoulder_width / torso_length) < 0.5
                 )
             )
 
             if is_side:
 
                 if (
-                    (conf[4] + conf[6]) >
-                    (conf[3] + conf[5]) + 0.2
+                    (conf[4] + conf[6])
+                    > (conf[3] + conf[5]) + 0.2
                 ):
-
                     current_posture = "左側躺"
 
                 elif (
-                    (conf[3] + conf[5]) >
-                    (conf[4] + conf[6]) + 0.2
+                    (conf[3] + conf[5])
+                    > (conf[4] + conf[6]) + 0.2
                 ):
-
                     current_posture = "右側躺"
 
                 else:
@@ -248,9 +243,13 @@ def classify_posture(results):
     return current_posture
 
 # =========================
-# iOS 相容音效系統
+# Alarm Sound
 # =========================
-def render_audio_system():
+def render_loop_alarm():
+
+    if not st.session_state.sound_enabled:
+        st.warning("🔇 請先按左側『啟用警報聲』")
+        return
 
     audio_file = Path("alarm.mp3")
 
@@ -262,61 +261,13 @@ def render_audio_system():
 
     b64 = base64.b64encode(audio_bytes).decode()
 
-    autoplay = "true" if shared_state.alarm else "false"
-
-    html_code = f"""
-    <html>
-    <body>
-
-    <button onclick="unlockAudio()"
-        style="
-            font-size:18px;
-            padding:12px 20px;
-            background:#2563eb;
-            color:white;
-            border:none;
-            border-radius:10px;
-            cursor:pointer;
-            margin-bottom:10px;
-        ">
-        🔊 啟用 iPhone / iPad 聲音
-    </button>
-
-    <audio id="alarmAudio" loop>
+    audio_html = f"""
+    <audio autoplay loop>
         <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
     </audio>
-
-    <script>
-
-    let audio = document.getElementById("alarmAudio");
-
-    function unlockAudio() {{
-        audio.play();
-        audio.pause();
-        audio.currentTime = 0;
-
-        alert("聲音系統已啟用");
-    }}
-
-    let shouldPlay = "{autoplay}";
-
-    if (shouldPlay === "true") {{
-        audio.play().catch((e) => {{
-            console.log("播放失敗:", e);
-        }});
-    }}
-    else {{
-        audio.pause();
-        audio.currentTime = 0;
-    }}
-
-    </script>
-
-    </body>
-    </html>
     """
 
-    st.components.v1.html(html_code, height=120)
+    st.components.v1.html(audio_html, height=0)
 
 # =========================
 # Sidebar
@@ -332,6 +283,15 @@ alarm_threshold = st.sidebar.slider(
 )
 
 # =========================
+# Enable Sound
+# =========================
+if st.sidebar.button("🔊 啟用警報聲"):
+    st.session_state.sound_enabled = True
+    st.sidebar.success("警報聲已啟用")
+
+st.sidebar.markdown("---")
+
+# =========================
 # Start / Stop
 # =========================
 if st.sidebar.button("▶️ Start"):
@@ -339,16 +299,16 @@ if st.sidebar.button("▶️ Start"):
     with shared_state.lock:
 
         shared_state.monitoring = True
-
         shared_state.start_time = time.time()
 
         shared_state.duration = 0.0
-
         shared_state.alarm = False
 
         shared_state.alarm_acknowledged = False
 
-        shared_state.last_posture = shared_state.current_posture
+        shared_state.last_posture = (
+            shared_state.current_posture
+        )
 
 if st.sidebar.button("⏹ Stop"):
 
@@ -359,18 +319,21 @@ if st.sidebar.button("⏹ Stop"):
         shared_state.duration = 0.0
 
         shared_state.alarm = False
-
         shared_state.alarm_acknowledged = False
 
         shared_state.current_posture = "無人躺著"
-
         shared_state.last_posture = "無人躺著"
 
 st.sidebar.markdown("---")
 
 st.sidebar.info(
-    "請先按下『啟用 iPhone/iPad 聲音』後再開始監測。"
+    "按下 Start 後開始監測；Stop 會停止並重新計算。"
 )
+
+# =========================
+# Auto Refresh
+# =========================
+st_autorefresh(interval=1000, key="refresh")
 
 # =========================
 # Video Processor
@@ -400,35 +363,27 @@ class PoseVideoProcessor:
                 else:
 
                     shared_state.last_posture = current_posture
-
                     shared_state.current_posture = current_posture
 
                     shared_state.start_time = now
-
                     shared_state.duration = 0.0
 
                     shared_state.alarm = False
-
                     shared_state.alarm_acknowledged = False
 
                 if (
                     shared_state.duration >= alarm_threshold
-                    and
-                    current_posture != "無人躺著"
-                    and
-                    not shared_state.alarm_acknowledged
+                    and current_posture != "無人躺著"
+                    and not shared_state.alarm_acknowledged
                 ):
-
                     shared_state.alarm = True
 
                 else:
 
                     if (
                         current_posture == "無人躺著"
-                        or
-                        shared_state.alarm_acknowledged
+                        or shared_state.alarm_acknowledged
                     ):
-
                         shared_state.alarm = False
 
                 shared_state.current_posture = current_posture
@@ -436,7 +391,6 @@ class PoseVideoProcessor:
             else:
 
                 shared_state.duration = 0.0
-
                 shared_state.alarm = False
 
         annotated = results[0].plot()
@@ -446,8 +400,7 @@ class PoseVideoProcessor:
             monitor_text = (
                 "監測中"
                 if shared_state.monitoring
-                else
-                "已停止"
+                else "已停止"
             )
 
             info_text = (
@@ -456,44 +409,42 @@ class PoseVideoProcessor:
                 f"持續時間: {int(shared_state.duration)} 秒"
             )
 
+        cv2.rectangle(
+            annotated,
+            (20, 20),
+            (900, 70),
+            (0, 0, 0),
+            -1
+        )
+
+        annotated = put_chinese_text(
+            annotated,
+            info_text,
+            (30, 25),
+            text_color=(255, 255, 255),
+            font_size=32
+        )
+
+        if shared_state.alarm:
+
             cv2.rectangle(
                 annotated,
-                (20,20),
-                (950,80),
-                (0,0,0),
-                -1
+                (0, 0),
+                (annotated.shape[1], annotated.shape[0]),
+                (0, 0, 255),
+                10
             )
 
-            annotated = put_chinese_text(
+            cv2.putText(
                 annotated,
-                info_text,
-                (30,25),
-                font_size=32
+                "ALARM",
+                (30, 140),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1.5,
+                (0, 0, 255),
+                4,
+                cv2.LINE_AA
             )
-
-            if shared_state.alarm:
-
-                cv2.rectangle(
-                    annotated,
-                    (0,0),
-                    (
-                        annotated.shape[1],
-                        annotated.shape[0]
-                    ),
-                    (0,0,255),
-                    10
-                )
-
-                cv2.putText(
-                    annotated,
-                    "ALARM",
-                    (30,140),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    1.5,
-                    (0,0,255),
-                    4,
-                    cv2.LINE_AA
-                )
 
         return av.VideoFrame.from_ndarray(
             annotated,
@@ -517,11 +468,7 @@ with left_col:
         mode=WebRtcMode.SENDRECV,
         rtc_configuration={
             "iceServers": [
-                {
-                    "urls": [
-                        "stun:stun.l.google.com:19302"
-                    ]
-                }
+                {"urls": ["stun:stun.l.google.com:19302"]}
             ]
         },
         media_stream_constraints={
@@ -542,11 +489,9 @@ with right_col:
     with shared_state.lock:
 
         posture_now = shared_state.current_posture
-
         duration_now = int(shared_state.duration)
 
         alarm_now = shared_state.alarm
-
         monitoring_now = shared_state.monitoring
 
     c1, c2, c3 = st.columns(3)
@@ -574,8 +519,7 @@ with right_col:
         system_text = (
             "監測中"
             if monitoring_now
-            else
-            "停止"
+            else "停止"
         )
 
         st.markdown(f"""
@@ -588,7 +532,7 @@ with right_col:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # =========================
-    # 警報區
+    # Alarm Area
     # =========================
     st.subheader("3. 警報摘要")
 
@@ -601,14 +545,13 @@ with right_col:
         </div>
         """, unsafe_allow_html=True)
 
-        render_audio_system()
+        render_loop_alarm()
 
-        if st.button("✅ 確認此警報", type="primary"):
+        if st.button("✅ 確認此資訊", type="primary"):
 
             with shared_state.lock:
 
                 shared_state.alarm_acknowledged = True
-
                 shared_state.alarm = False
 
             st.rerun()
@@ -620,5 +563,3 @@ with right_col:
             ✅ 目前尚未觸發警報
         </div>
         """, unsafe_allow_html=True)
-
-        render_audio_system()
