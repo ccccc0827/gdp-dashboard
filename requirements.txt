@@ -1,5 +1,7 @@
 streamlit
 streamlit-webrtc
+streamlit-autorefresh
 ultralytics
 opencv-python-headless
 av
+tornado
