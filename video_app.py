@@ -140,7 +140,7 @@ def put_chinese_text(img, text, position, text_color=(255, 255, 255), font_size=
         except IOError:
             # 若部署到雲端 (如 Streamlit Cloud)，請準備字體檔並修改此處
             font = ImageFont.truetype("NotoSansTC-Regular.ttf", font_size)
-            font = ImageFont.load_default()
+
             
     # PIL 畫上文字
     draw.text(position, text, font=font, fill=text_color)
