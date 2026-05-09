@@ -248,6 +248,21 @@ shared_state = st.session_state.shared_state
 
 if "sound_enabled" not in st.session_state:
     st.session_state.sound_enabled = False
+# =========================
+# State Migration
+# 避免 Streamlit 沿用舊版 shared_state 時缺少新欄位
+# =========================
+if not hasattr(shared_state, "alarm_logs"):
+    shared_state.alarm_logs = []
+
+if not hasattr(shared_state, "alarm_logged"):
+    shared_state.alarm_logged = False
+
+if not hasattr(shared_state, "alarm_acknowledged"):
+    shared_state.alarm_acknowledged = False
+
+if not hasattr(shared_state, "lock"):
+    shared_state.lock = threading.Lock()
 
 
 # =========================
@@ -723,7 +738,7 @@ def render_dashboard():
     st.caption("A01 為目前即時 YOLO 偵測結果；A02 至 A04 為展示多床監測概念的模擬資料。")
 
 
-@st.fragment(run_every="1s")
+
 def render_summary_panel():
 
     state = get_realtime_state()
@@ -884,9 +899,12 @@ with tab_live:
     left_col, right_col = st.columns([1.05, 1.25])
 
     with left_col:
-        st.markdown('<div class="section-title">1. 即時影像監測</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-title">1. 即時影像監測</div>',
+            unsafe_allow_html=True
+        )
 
-        webrtc_streamer(
+        ctx = webrtc_streamer(
             key="pose-monitor",
             mode=WebRtcMode.SENDRECV,
             rtc_configuration={
@@ -903,7 +921,26 @@ with tab_live:
         )
 
     with right_col:
-        render_summary_panel()
+        summary_placeholder = st.empty()
+
+        st.caption(
+            "右側摘要會在 camera 運行時即時更新；若畫面短暫停頓，請以左側影像上方黑框資訊為主。"
+        )
+
+    # =========================
+    # Live Summary Update
+    # 不使用 st.fragment，避免 camera 反覆重啟
+    # =========================
+    if ctx.state.playing:
+        while ctx.state.playing:
+            with summary_placeholder.container():
+                render_summary_panel()
+
+            time.sleep(1)
+
+    else:
+        with summary_placeholder.container():
+            render_summary_panel()
 
 with tab_log:
     render_alarm_log()
