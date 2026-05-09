@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw, ImageFont
 from ultralytics import YOLO
 from streamlit_webrtc import webrtc_streamer, WebRtcMode
 from pathlib import Path
-from streamlit_autorefresh import st_autorefresh
+
 
 # =========================
 # Page Config
@@ -330,10 +330,7 @@ st.sidebar.info(
     "按下 Start 後開始監測；Stop 會停止並重新計算。"
 )
 
-# =========================
-# Auto Refresh
-# =========================
-st_autorefresh(interval=1000, key="refresh")
+
 
 # =========================
 # Video Processor
