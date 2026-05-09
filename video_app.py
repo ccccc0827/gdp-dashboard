@@ -547,35 +547,3 @@ with left_col:
 # =========================
 with right_col:
     render_summary_panel()
-    # =========================
-    # Alarm Area
-    # =========================
-    st.subheader("3. 警報摘要")
-
-    if alarm_now:
-
-        st.markdown(f"""
-        <div class="alert-box">
-            🚨 偵測到姿勢持續超過 {alarm_threshold} 秒，
-            請協助翻身。
-        </div>
-        """, unsafe_allow_html=True)
-
-        render_loop_alarm()
-
-        if st.button("✅ 確認此資訊", type="primary"):
-
-            with shared_state.lock:
-
-                shared_state.alarm_acknowledged = True
-                shared_state.alarm = False
-
-            st.rerun()
-
-    else:
-
-        st.markdown("""
-        <div class="normal-box">
-            ✅ 目前尚未觸發警報
-        </div>
-        """, unsafe_allow_html=True)
