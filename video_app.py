@@ -820,7 +820,7 @@ def render_summary_panel():
         </div>
         """, unsafe_allow_html=True)
     
-        render_loop_once()
+        render_alarm_once()
     
         btn1, btn2 = st.columns(2)
     
