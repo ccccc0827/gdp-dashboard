@@ -335,7 +335,77 @@ st.sidebar.info(
 # =========================
 # Video Processor
 # =========================
+
 class PoseVideoProcessor:
+    # =========================
+    # Right Panel Fragment
+    # 只刷新右側摘要，不刷新 WebRTC 影像
+    # =========================
+    @st.fragment(run_every=1)
+    def render_summary_panel():
+        st.subheader("2. 摘要資訊")
+    
+        with shared_state.lock:
+            posture_now = shared_state.current_posture
+            duration_now = int(shared_state.duration)
+            alarm_now = shared_state.alarm
+            monitoring_now = shared_state.monitoring
+    
+        c1, c2, c3 = st.columns(3)
+    
+        with c1:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">目前姿勢</div>
+                <div class="metric-value">{posture_now}</div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+        with c2:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">持續時間</div>
+                <div class="metric-value">{duration_now} 秒</div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+        with c3:
+            system_text = "監測中" if monitoring_now else "停止"
+    
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">系統狀態</div>
+                <div class="metric-value">{system_text}</div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+        st.markdown("<br>", unsafe_allow_html=True)
+    
+        st.subheader("3. 警報摘要")
+    
+        if alarm_now:
+            st.markdown(f"""
+            <div class="alert-box">
+                🚨 偵測到姿勢持續超過 {alarm_threshold} 秒，
+                請協助翻身。
+            </div>
+            """, unsafe_allow_html=True)
+    
+            render_loop_alarm()
+    
+            if st.button("✅ 確認此資訊", type="primary"):
+                with shared_state.lock:
+                    shared_state.alarm_acknowledged = True
+                    shared_state.alarm = False
+    
+                st.rerun()
+    
+        else:
+            st.markdown("""
+            <div class="normal-box">
+                ✅ 目前尚未觸發警報
+            </div>
+            """, unsafe_allow_html=True)
 
     def recv(self, frame):
 
@@ -480,53 +550,7 @@ with left_col:
 # Right Panel
 # =========================
 with right_col:
-
-    st.subheader("2. 摘要資訊")
-
-    with shared_state.lock:
-
-        posture_now = shared_state.current_posture
-        duration_now = int(shared_state.duration)
-
-        alarm_now = shared_state.alarm
-        monitoring_now = shared_state.monitoring
-
-    c1, c2, c3 = st.columns(3)
-
-    with c1:
-
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">目前姿勢</div>
-            <div class="metric-value">{posture_now}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with c2:
-
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">持續時間</div>
-            <div class="metric-value">{duration_now} 秒</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with c3:
-
-        system_text = (
-            "監測中"
-            if monitoring_now
-            else "停止"
-        )
-
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">系統狀態</div>
-            <div class="metric-value">{system_text}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
+    render_summary_panel()
 
     # =========================
     # Alarm Area
