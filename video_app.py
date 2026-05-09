@@ -528,8 +528,12 @@ class PoseVideoProcessor:
                     shared_state.duration >= alarm_threshold
                     and current_posture != "無人躺著"
                 ):
-                    # 如果尚未被照服員查看，觸發警報
-                    if not shared_state.alarm_acknowledged:
+                    # 超過門檻，但已經被照服員確認過：不再響警報，時間繼續累積
+                    if shared_state.alarm_acknowledged:
+                        shared_state.alarm = False
+                
+                    # 超過門檻，且尚未確認：觸發警報
+                    else:
                         shared_state.alarm = True
                 
                         if not shared_state.alarm_logged:
@@ -545,13 +549,12 @@ class PoseVideoProcessor:
                             )
                             shared_state.alarm_logged = True
                 
-                    # 如果已經按過「立即查看」，就不再持續響警報，但時間繼續累積
-                    else:
-                        shared_state.alarm = False
-                
                 else:
+                    # 未達門檻時不響警報
+                    shared_state.alarm = False
+                
+                    # 無人時重置確認狀態
                     if current_posture == "無人躺著":
-                        shared_state.alarm = False
                         shared_state.alarm_logged = False
                         shared_state.alarm_acknowledged = False
 
@@ -823,6 +826,7 @@ def render_summary_panel():
         with btn1:
             if st.button("👀 已確認資訊，立即查看", type="secondary"):
                 with shared_state.lock:
+                    # 停止警報，但不重新計時
                     shared_state.alarm = False
                     shared_state.alarm_acknowledged = True
         
@@ -833,11 +837,11 @@ def render_summary_panel():
                             "床位": "A01",
                             "姿勢": shared_state.current_posture,
                             "持續時間": format_duration(shared_state.duration),
-                            "狀態": "已查看，未重新計時"
+                            "狀態": "已查看，警報停止，未重新計時"
                         }
                     )
         
-                st.success("已確認資訊，系統會持續計時。")
+                st.success("已確認資訊，警報已停止，系統會繼續累積同姿勢時間。")
     
         with btn2:
             if st.button("✅ 已協助翻身，重新計時", type="primary"):
