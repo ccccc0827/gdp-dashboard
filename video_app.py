@@ -337,10 +337,6 @@ st.sidebar.info(
 # =========================
 
 class PoseVideoProcessor:
-    # =========================
-    # Right Panel Fragment
-    # 只刷新右側摘要，不刷新 WebRTC 影像
-    # =========================
     @st.fragment(run_every=1)
     def render_summary_panel():
         st.subheader("2. 摘要資訊")
