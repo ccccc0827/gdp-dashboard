@@ -413,7 +413,7 @@ def classify_posture(results):
 # =========================
 # Alarm Sound
 # =========================
-def render_loop_alarm():
+def render_alarm_once():
 
     if not st.session_state.sound_enabled:
         st.warning("🔇 請先按左側「啟用警報聲」")
@@ -428,8 +428,9 @@ def render_loop_alarm():
     audio_bytes = audio_file.read_bytes()
     b64 = base64.b64encode(audio_bytes).decode()
 
+    # 不使用 loop，避免按下確認後仍持續播放
     audio_html = f"""
-    <audio autoplay loop>
+    <audio autoplay>
         <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
     </audio>
     """
@@ -819,7 +820,7 @@ def render_summary_panel():
         </div>
         """, unsafe_allow_html=True)
     
-        render_loop_alarm()
+        render_loop_once()
     
         btn1, btn2 = st.columns(2)
     
