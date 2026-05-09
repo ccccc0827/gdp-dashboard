@@ -620,6 +620,15 @@ class PoseVideoProcessor:
 # =========================
 def get_realtime_state():
     with shared_state.lock:
+
+        # 即使 camera 短暫重啟，只要系統仍在監測，
+        # 且目前有偵測到住民，就用真實時間持續更新 duration
+        if (
+            shared_state.monitoring
+            and shared_state.current_posture != "無人躺著"
+        ):
+            shared_state.duration = time.time() - shared_state.start_time
+
         return {
             "posture": shared_state.current_posture,
             "duration": int(shared_state.duration),
@@ -628,7 +637,6 @@ def get_realtime_state():
             "acknowledged": shared_state.alarm_acknowledged,
             "logs": list(shared_state.alarm_logs),
         }
-
 
 def build_bed_data():
     live = get_realtime_state()
@@ -817,7 +825,7 @@ def render_summary_panel():
                 with shared_state.lock:
                     shared_state.alarm = False
                     shared_state.alarm_acknowledged = True
-    
+        
                     shared_state.alarm_logs.insert(
                         0,
                         {
@@ -828,8 +836,8 @@ def render_summary_panel():
                             "狀態": "已查看，未重新計時"
                         }
                     )
-    
-                st.rerun()
+        
+                st.success("已確認資訊，系統會持續計時。")
     
         with btn2:
             if st.button("✅ 已協助翻身，重新計時", type="primary"):
@@ -855,7 +863,7 @@ def render_summary_panel():
                         }
                     )
     
-                st.rerun()
+                st.success("已重新計時。")
     
     elif acknowledged_now and duration_now >= alarm_threshold and posture_now != "無人躺著":
         st.markdown(f"""
