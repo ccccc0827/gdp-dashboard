@@ -339,12 +339,12 @@ st.sidebar.info(
 class PoseVideoProcessor:    
         render_loop_alarm()
     
-         if st.button("✅ 確認此資訊", type="primary"):
-                with shared_state.lock:
-                    shared_state.alarm_acknowledged = True
-                    shared_state.alarm = False
+        if st.button("✅ 確認此資訊", type="primary"):
+            with shared_state.lock:
+                shared_state.alarm_acknowledged = True
+                shared_state.alarm = False
     
-                st.rerun()
+            st.rerun()
     
         else:
             st.markdown("""
