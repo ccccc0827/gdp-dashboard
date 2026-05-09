@@ -335,23 +335,7 @@ st.sidebar.info(
 # =========================
 # Video Processor
 # =========================
-
-class PoseVideoProcessor:    
-        render_loop_alarm()
-    
-        if st.button("✅ 確認此資訊", type="primary"):
-            with shared_state.lock:
-                shared_state.alarm_acknowledged = True
-                shared_state.alarm = False
-    
-            st.rerun()
-    
-        else:
-            st.markdown("""
-            <div class="normal-box">
-                ✅ 目前尚未觸發警報
-            </div>
-            """, unsafe_allow_html=True)
+class PoseVideoProcessor:
 
     def recv(self, frame):
 
@@ -368,13 +352,9 @@ class PoseVideoProcessor:
             if shared_state.monitoring:
 
                 if current_posture == shared_state.last_posture:
-
-                    shared_state.duration = (
-                        now - shared_state.start_time
-                    )
+                    shared_state.duration = now - shared_state.start_time
 
                 else:
-
                     shared_state.last_posture = current_posture
                     shared_state.current_posture = current_posture
 
@@ -392,7 +372,6 @@ class PoseVideoProcessor:
                     shared_state.alarm = True
 
                 else:
-
                     if (
                         current_posture == "無人躺著"
                         or shared_state.alarm_acknowledged
@@ -402,7 +381,6 @@ class PoseVideoProcessor:
                 shared_state.current_posture = current_posture
 
             else:
-
                 shared_state.duration = 0.0
                 shared_state.alarm = False
 
@@ -410,17 +388,15 @@ class PoseVideoProcessor:
 
         with shared_state.lock:
 
-            monitor_text = (
-                "監測中"
-                if shared_state.monitoring
-                else "已停止"
-            )
+            monitor_text = "監測中" if shared_state.monitoring else "已停止"
 
             info_text = (
                 f"{monitor_text} | "
                 f"姿勢: {shared_state.current_posture} | "
                 f"持續時間: {int(shared_state.duration)} 秒"
             )
+
+            alarm_now = shared_state.alarm
 
         cv2.rectangle(
             annotated,
@@ -438,8 +414,7 @@ class PoseVideoProcessor:
             font_size=32
         )
 
-        if shared_state.alarm:
-
+        if alarm_now:
             cv2.rectangle(
                 annotated,
                 (0, 0),
@@ -464,15 +439,14 @@ class PoseVideoProcessor:
             format="bgr24"
         )
 
-# =========================
-# Layout
-# =========================
+
 # =========================
 # Right Panel Fragment
 # 只刷新右側摘要，不刷新 WebRTC 影像
 # =========================
 @st.fragment(run_every="1s")
 def render_summary_panel():
+
     st.subheader("2. 摘要資訊")
 
     with shared_state.lock:
@@ -536,6 +510,11 @@ def render_summary_panel():
             ✅ 目前尚未觸發警報
         </div>
         """, unsafe_allow_html=True)
+
+
+# =========================
+# Layout
+# =========================
 left_col, right_col = st.columns([1.15, 1.4])
 
 
@@ -562,12 +541,12 @@ with left_col:
         async_processing=True,
     )
 
+
 # =========================
 # Right Panel
 # =========================
 with right_col:
     render_summary_panel()
-
     # =========================
     # Alarm Area
     # =========================
