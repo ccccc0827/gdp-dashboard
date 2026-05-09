@@ -277,7 +277,7 @@ st.sidebar.header("⚙️ 分析設定")
 alarm_threshold = st.sidebar.slider(
     "同姿勢維持幾秒觸發警報",
     min_value=3,
-    max_value=60,
+    max_value=7200,
     value=10,
     step=1
 )
