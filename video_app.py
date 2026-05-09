@@ -550,7 +550,7 @@ with left_col:
 # Right Panel
 # =========================
 with right_col:
-    render_summary_panel()
+    render_summary_panel():
 
     # =========================
     # Alarm Area
