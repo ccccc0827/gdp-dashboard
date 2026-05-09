@@ -528,25 +528,32 @@ class PoseVideoProcessor:
                     shared_state.duration >= alarm_threshold
                     and current_posture != "無人躺著"
                 ):
-                    shared_state.alarm = True
-
-                    if not shared_state.alarm_logged:
-                        shared_state.alarm_logs.insert(
-                            0,
-                            {
-                                "時間": datetime.now().strftime("%H:%M:%S"),
-                                "床位": "A01",
-                                "姿勢": current_posture,
-                                "持續時間": format_duration(shared_state.duration),
-                                "狀態": "已觸發"
-                            }
-                        )
-                        shared_state.alarm_logged = True
-
+                    # 如果尚未被照服員查看，觸發警報
+                    if not shared_state.alarm_acknowledged:
+                        shared_state.alarm = True
+                
+                        if not shared_state.alarm_logged:
+                            shared_state.alarm_logs.insert(
+                                0,
+                                {
+                                    "時間": datetime.now().strftime("%H:%M:%S"),
+                                    "床位": "A01",
+                                    "姿勢": current_posture,
+                                    "持續時間": format_duration(shared_state.duration),
+                                    "狀態": "已觸發"
+                                }
+                            )
+                            shared_state.alarm_logged = True
+                
+                    # 如果已經按過「立即查看」，就不再持續響警報，但時間繼續累積
+                    else:
+                        shared_state.alarm = False
+                
                 else:
                     if current_posture == "無人躺著":
                         shared_state.alarm = False
                         shared_state.alarm_logged = False
+                        shared_state.alarm_acknowledged = False
 
                 shared_state.current_posture = current_posture
 
@@ -618,6 +625,7 @@ def get_realtime_state():
             "duration": int(shared_state.duration),
             "alarm": shared_state.alarm,
             "monitoring": shared_state.monitoring,
+            "acknowledged": shared_state.alarm_acknowledged,
             "logs": list(shared_state.alarm_logs),
         }
 
@@ -747,6 +755,7 @@ def render_summary_panel():
     duration_now = state["duration"]
     alarm_now = state["alarm"]
     monitoring_now = state["monitoring"]
+    acknowledged_now = state["acknowledged"]
 
     status_text, status_key = get_status(
         duration_now,
@@ -795,22 +804,79 @@ def render_summary_panel():
         st.markdown(f"""
         <div class="alert-box">
             🚨 A01 偵測到姿勢持續超過 {format_duration(alarm_threshold)}，
-            請協助翻身或確認狀況。
+            請確認住民狀況。
         </div>
         """, unsafe_allow_html=True)
-
+    
         render_loop_alarm()
-
-        if st.button("✅ 確認此資訊並重新計時", type="primary"):
+    
+        btn1, btn2 = st.columns(2)
+    
+        with btn1:
+            if st.button("👀 已確認資訊，立即查看", type="secondary"):
+                with shared_state.lock:
+                    shared_state.alarm = False
+                    shared_state.alarm_acknowledged = True
+    
+                    shared_state.alarm_logs.insert(
+                        0,
+                        {
+                            "時間": datetime.now().strftime("%H:%M:%S"),
+                            "床位": "A01",
+                            "姿勢": shared_state.current_posture,
+                            "持續時間": format_duration(shared_state.duration),
+                            "狀態": "已查看，未重新計時"
+                        }
+                    )
+    
+                st.rerun()
+    
+        with btn2:
+            if st.button("✅ 已協助翻身，重新計時", type="primary"):
+                with shared_state.lock:
+                    current_posture = shared_state.current_posture
+    
+                    shared_state.alarm = False
+                    shared_state.alarm_acknowledged = False
+                    shared_state.alarm_logged = False
+    
+                    shared_state.start_time = time.time()
+                    shared_state.duration = 0.0
+                    shared_state.last_posture = current_posture
+    
+                    shared_state.alarm_logs.insert(
+                        0,
+                        {
+                            "時間": datetime.now().strftime("%H:%M:%S"),
+                            "床位": "A01",
+                            "姿勢": current_posture,
+                            "持續時間": "已重新計時",
+                            "狀態": "已協助翻身"
+                        }
+                    )
+    
+                st.rerun()
+    
+    elif acknowledged_now and duration_now >= alarm_threshold and posture_now != "無人躺著":
+        st.markdown(f"""
+        <div class="warning-box">
+            👀 已確認資訊，照服員可立即查看。<br>
+            目前尚未重新計時，同姿勢已持續 {format_duration(duration_now)}。
+        </div>
+        """, unsafe_allow_html=True)
+    
+        if st.button("✅ 已協助翻身，重新計時", type="primary"):
             with shared_state.lock:
                 current_posture = shared_state.current_posture
+    
                 shared_state.alarm = False
                 shared_state.alarm_acknowledged = False
                 shared_state.alarm_logged = False
+    
                 shared_state.start_time = time.time()
                 shared_state.duration = 0.0
                 shared_state.last_posture = current_posture
-
+    
                 shared_state.alarm_logs.insert(
                     0,
                     {
@@ -818,12 +884,12 @@ def render_summary_panel():
                         "床位": "A01",
                         "姿勢": current_posture,
                         "持續時間": "已重新計時",
-                        "狀態": "已確認"
+                        "狀態": "已協助翻身"
                     }
                 )
-
+    
             st.rerun()
-
+    
     elif status_key == "warning":
         st.markdown(f"""
         <div class="warning-box">
